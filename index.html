@@ -24,9 +24,9 @@
 <body>
     <h1>NMR Chart</h1>
     <div class="slider-container">
-        <label for="N">N:</label>
-        <input type="range" id="N" min="32" max="16384" value="2048" step="1">
-        <span id="N-value">2048</span>
+        <label for="2**N">N (as of 2<sup>N</sup>):</label>
+        <input type="range" id="2**N" min="2" max="16" value="4" step="1">
+        <span id="2**N-value">4</span>
     </div>
     <div class="slider-container">
         <label for="peakshift">Peak Shift:</label>
@@ -126,14 +126,14 @@
         plotNMRChart(2048, 5, 0, 0);
 
         // Add event listeners to sliders
-        const sliders = ['N', 'peakshift', 'J1', 'J2'];
+        const sliders = ['2**N', 'peakshift', 'J1', 'J2'];
         sliders.forEach(id => {
             const slider = document.getElementById(id);
             const value = document.getElementById(`${id}-value`);
             slider.addEventListener('input', () => {
                 value.textContent = slider.value;
                 plotNMRChart(
-                    document.getElementById('N').value,
+                    2**document.getElementById('2**N').value,
                     parseFloat(document.getElementById('peakshift').value),
                     parseFloat(document.getElementById('J1').value),
                     parseFloat(document.getElementById('J2').value)
