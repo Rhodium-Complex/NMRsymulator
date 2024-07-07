@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NMR Chart</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .slider-container {
+            margin-bottom: 20px;
+        }
+        .slider-container label {
+            display: inline-block;
+            width: 100px;
+        }
+    </style>
+</head>
+<body>
+    <h1>NMR Chart</h1>
+    <div class="slider-container">
+        <label for="N">N:</label>
+        <input type="range" id="N" min="32" max="16384" value="2048" step="1">
+        <span id="N-value">2048</span>
+    </div>
+    <div class="slider-container">
+        <label for="peakshift">Peak Shift:</label>
+        <input type="range" id="peakshift" min="4" max="6" value="5" step="0.1">
+        <span id="peakshift-value">5</span>
+    </div>
+    <div class="slider-container">
+        <label for="J1">J1:</label>
+        <input type="range" id="J1" min="0" max="2" value="0" step="0.01">
+        <span id="J1-value">0</span>
+    </div>
+    <div class="slider-container">
+        <label for="J2">J2:</label>
+        <input type="range" id="J2" min="0" max="2" value="0" step="0.01">
+        <span id="J2-value">0</span>
+    </div>
+    <div id="chart"></div>
+
+    <script>
+        function linspace(start, stop, num) {
+            const step = (stop - start) / (num - 1);
+            return Array.from({length: num}, (_, i) => start + step * i);
+        }
+
+        function makeNMRChart(rangeMax, N, peaktops) {
+            const measuringTime = N / rangeMax / 2;
+            const t = linspace(0, measuringTime, N);
+            let signal = new Array(N).fill(0);
+
+            for (let peak of peaktops) {
+                for (let i = 0; i < N; i++) {
+                    signal[i] += Math.cos(2 * Math.PI * peak * t[i]);
+                }
+            }
+
+            for (let i = 0; i < N; i++) {
+                signal[i] *= Math.exp(-0.4 * t[i]);
+                signal[i] += (Math.random() - 0.5) * 0.02; // Adding noise
+            }
+
+            const realFFT = new RFFT(N);
+            const signalPositive = realFFT.forward(signal);
+            const freq = linspace(0, rangeMax, N / 2);
+
+            const minSignal = Math.min(...signalPositive);
+            const maxSignal = Math.max(...signalPositive);
+            const normalizedSignal = signalPositive.map(v => (v - minSignal) / (maxSignal - minSignal));
+
+            return [freq, normalizedSignal];
+        }
+
+        function plotNMRChart(N, peakshift, J1, J2) {
+            N = Math.round(N);
+            const peaktops = [(-J1-J2)/2, (-J1+J2)/2, (J1-J2)/2, (J1+J2)/2].map(v => v + peakshift);
+            const [x, y] = makeNMRChart(10, N, peaktops);
+
+            Plotly.newPlot('chart', [{
+                x: x,
+                y: y,
+                type: 'scatter',
+                mode: 'lines'
+            }], {
+                title: 'NMR Chart',
+                xaxis: { title: 'Frequency' },
+                yaxis: { title: 'Signal' }
+            });
+        }
+
+        // Real FFT implementation
+        class RFFT {
+            constructor(size) {
+                this.size = size;
+                this.cosTable = new Float64Array(size);
+                this.sinTable = new Float64Array(size);
+                for (let i = 0; i < size; i++) {
+                    const angle = -2 * Math.PI * i / size;
+                    this.cosTable[i] = Math.cos(angle);
+                    this.sinTable[i] = Math.sin(angle);
+                }
+            }
+
+            forward(input) {
+                const output = new Float64Array(this.size / 2);
+                for (let k = 0; k < this.size / 2; k++) {
+                    let real = 0, imag = 0;
+                    for (let n = 0; n < this.size; n++) {
+                        real += input[n] * this.cosTable[(k * n) % this.size];
+                        imag -= input[n] * this.sinTable[(k * n) % this.size];
+                    }
+                    output[k] = Math.sqrt(real * real + imag * imag);
+                }
+                return output;
+            }
+        }
+
+        // Initialize the chart
+        plotNMRChart(2048, 5, 0, 0);
+
+        // Add event listeners to sliders
+        const sliders = ['N', 'peakshift', 'J1', 'J2'];
+        sliders.forEach(id => {
+            const slider = document.getElementById(id);
+            const value = document.getElementById(`${id}-value`);
+            slider.addEventListener('input', () => {
+                value.textContent = slider.value;
+                plotNMRChart(
+                    document.getElementById('N').value,
+                    parseFloat(document.getElementById('peakshift').value),
+                    parseFloat(document.getElementById('J1').value),
+                    parseFloat(document.getElementById('J2').value)
+                );
+            });
+        });
+    </script>
+</body>
+</html>
