@@ -25,8 +25,8 @@
     <h1>NMR Chart</h1>
     <div class="slider-container">
         <label for="2**N">N (as of 2<sup>N</sup>):</label>
-        <input type="range" id="2**N" min="2" max="16" value="4" step="1">
-        <span id="2**N-value">4</span>
+        <input type="range" id="2**N" min="2" max="16" value="10" step="1">
+        <span id="2**N-value">10</span>
     </div>
     <div class="slider-container">
         <label for="peakshift">Peak Shift:</label>
@@ -63,7 +63,7 @@
             }
 
             for (let i = 0; i < N; i++) {
-                signal[i] *= Math.exp(-0.4 * t[i]);
+                signal[i] *= Math.exp(-0.2 * t[i]);
                 signal[i] += (Math.random() - 0.5) * 0.02; // Adding noise
             }
 
@@ -114,16 +114,15 @@
                     let real = 0, imag = 0;
                     for (let n = 0; n < this.size; n++) {
                         real += input[n] * this.cosTable[(k * n) % this.size];
-                        imag -= input[n] * this.sinTable[(k * n) % this.size];
                     }
-                    output[k] = Math.sqrt(real * real + imag * imag);
+                    output[k] = real;
                 }
                 return output;
             }
         }
 
         // Initialize the chart
-        plotNMRChart(2048, 5, 0, 0);
+        plotNMRChart(1024, 5, 0, 0);
 
         // Add event listeners to sliders
         const sliders = ['2**N', 'peakshift', 'J1', 'J2'];
