@@ -2,143 +2,116 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NMR Chart</title>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .slider-container {
-            margin-bottom: 20px;
-        }
-        .slider-container label {
-            display: inline-block;
-            width: 100px;
-        }
-    </style>
+    <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist@2.5.1"></script>
 </head>
 <body>
-    <h1>NMR Chart</h1>
-    <div class="slider-container">
-        <label for="2**N">N (as of 2<sup>N</sup>):</label>
-        <input type="range" id="2**N" min="2" max="16" value="10" step="1">
-        <span id="2**N-value">10</span>
+    <div>
+        <label for="N">N:</label>
+        <input type="range" id="N" min="2" max="12" step=".1" value="8" oninput="updateChart()">
+        <span id="N_val">512</span>
     </div>
-    <div class="slider-container">
+    <div>
         <label for="peakshift">Peak Shift:</label>
-        <input type="range" id="peakshift" min="4" max="6" value="5" step="0.1">
-        <span id="peakshift-value">5</span>
+        <input type="range" id="peakshift" min="0" max="10" step="0.1" value="5" oninput="updateChart()">
+        <span id="peakshift_val">5</span>
     </div>
-    <div class="slider-container">
+    <div>
         <label for="J1">J1:</label>
-        <input type="range" id="J1" min="0" max="2" value="0" step="0.01">
-        <span id="J1-value">0</span>
+        <input type="range" id="J1" min="0" max="2" step="0.01" value="0" oninput="updateChart()">
+        <span id="J1_val">0</span>
     </div>
-    <div class="slider-container">
+    <div>
         <label for="J2">J2:</label>
-        <input type="range" id="J2" min="0" max="2" value="0" step="0.01">
-        <span id="J2-value">0</span>
+        <input type="range" id="J2" min="0" max="2" step="0.01" value="0" oninput="updateChart()">
+        <span id="J2_val">0</span>
     </div>
     <div id="chart"></div>
 
     <script>
-        function linspace(start, stop, num) {
-            const step = (stop - start) / (num - 1);
-            return Array.from({length: num}, (_, i) => start + step * i);
+        function fft(signal) {
+            const N = signal.length;
+            if (N <= 1) return signal.map(x => [x, 0]);
+
+            const hN = N / 2;
+            const even = fft(signal.filter((_, i) => i % 2 === 0));
+            const odd = fft(signal.filter((_, i) => i % 2 !== 0));
+
+            const combined = Array(N).fill([0, 0]);
+            for (let k = 0; k < hN; k++) {
+                const exp = [Math.cos(-2 * Math.PI * k / N), Math.sin(-2 * Math.PI * k / N)];
+                const t = [
+                    exp[0] * odd[k][0] - exp[1] * odd[k][1],
+                    exp[0] * odd[k][1] + exp[1] * odd[k][0]
+                ];
+                combined[k] = [even[k][0] + t[0], even[k][1] + t[1]];
+                combined[k + hN] = [even[k][0] - t[0], even[k][1] - t[1]];
+            }
+
+            return combined;
         }
 
-        function makeNMRChart(rangeMax, N, peaktops) {
-            const measuringTime = N / rangeMax / 2;
-            const t = linspace(0, measuringTime, N);
-            let signal = new Array(N).fill(0);
-
+        function makeNMRChart(range_max, N, peaktops) {
+            const mesuring_time = N / range_max / 2;
+            const t = Array.from({ length: N }, (_, i) => i * mesuring_time / N);
+            let signal_cos = new Array(N).fill(0);
+            let signal_sin = new Array(N).fill(0);
+            
             for (let peak of peaktops) {
                 for (let i = 0; i < N; i++) {
-                    signal[i] += Math.cos(2 * Math.PI * peak * t[i]);
+                    signal_cos[i] += Math.cos(2 * Math.PI * peak * t[i]);
+                    signal_sin[i] += Math.sin(2 * Math.PI * peak * t[i]);
                 }
             }
 
             for (let i = 0; i < N; i++) {
-                signal[i] *= Math.exp(-0.2 * t[i]);
-                signal[i] += (Math.random() - 0.5) * 0.02; // Adding noise
+                signal_cos[i] *= Math.exp(-0.4 * t[i]);
+                signal_sin[i] *= Math.exp(-0.4 * t[i]);
+                signal_cos[i] += (Math.random() * 0.02 - 0.01);
+                signal_sin[i] += (Math.random() * 0.02 - 0.01);
+                signal_cos[i] *= Math.cos(2 * Math.PI * 400000000 * t[i]);
+                signal_sin[i] *= Math.sin(2 * Math.PI * 400000000 * t[i]);
             }
 
-            const realFFT = new RFFT(N);
-            const signalPositive = realFFT.forward(signal);
-            const freq = linspace(0, rangeMax, N / 2);
+            const signal_cos_fft = fft(signal_cos).slice(0, N / 2);
+            const signal_sin_fft = fft(signal_sin).slice(0, N / 2);
+            let signal_positive = signal_cos_fft.map((v, i) => v[0] + signal_sin_fft[i][0]);
+            const min_val = Math.min(...signal_positive);
+            signal_positive = signal_positive.map(v => v - min_val);
+            const max_val = Math.max(...signal_positive);
+            signal_positive = signal_positive.map(v => v / max_val);
 
-            const minSignal = Math.min(...signalPositive);
-            const maxSignal = Math.max(...signalPositive);
-            const normalizedSignal = signalPositive.map(v => (v - minSignal) / (maxSignal - minSignal));
-
-            return [freq, normalizedSignal];
+            const freq = Array.from({ length: N / 2 }, (_, i) => i * range_max / N * 2);
+            
+            return { freq, signal_positive };
         }
 
-        function plotNMRChart(N, peakshift, J1, J2) {
-            N = Math.round(N);
-            const peaktops = [(-J1-J2)/2, (-J1+J2)/2, (J1-J2)/2, (J1+J2)/2].map(v => v + peakshift);
-            const [x, y] = makeNMRChart(10, N, peaktops);
+        function updateChart() {
+            const N = parseInt(document.getElementById("N").value);
+            const peakshift = parseFloat(document.getElementById("peakshift").value);
+            const J1 = parseFloat(document.getElementById("J1").value);
+            const J2 = parseFloat(document.getElementById("J2").value);
+            
+            document.getElementById("N_val").innerText = 2**N;
+            document.getElementById("peakshift_val").innerText = peakshift;
+            document.getElementById("J1_val").innerText = J1;
+            document.getElementById("J2_val").innerText = J2;
+            
+            const peaktops = [(-J1-J2)/2, (-J1+J2)/2, (J1-J2)/2, (J1+J2)/2].map(x => x + peakshift + 400000000);
+            const { freq, signal_positive } = makeNMRChart(10, 2**N, peaktops);
 
-            Plotly.newPlot('chart', [{
-                x: x,
-                y: y,
-                type: 'scatter',
+            const trace = {
+                x: freq,
+                y: signal_positive,
                 mode: 'lines'
-            }], {
-                title: 'NMR Chart',
-                xaxis: { title: 'Frequency' },
-                yaxis: { title: 'Signal' }
-            });
+            };
+
+            const data = [trace];
+
+            Plotly.newPlot('chart', data);
         }
 
-        // Real FFT implementation
-        class RFFT {
-            constructor(size) {
-                this.size = size;
-                this.cosTable = new Float64Array(size);
-                this.sinTable = new Float64Array(size);
-                for (let i = 0; i < size; i++) {
-                    const angle = -2 * Math.PI * i / size;
-                    this.cosTable[i] = Math.cos(angle);
-                    this.sinTable[i] = Math.sin(angle);
-                }
-            }
-
-            forward(input) {
-                const output = new Float64Array(this.size / 2);
-                for (let k = 0; k < this.size / 2; k++) {
-                    let real = 0, imag = 0;
-                    for (let n = 0; n < this.size; n++) {
-                        real += input[n] * this.cosTable[(k * n) % this.size];
-                    }
-                    output[k] = real;
-                }
-                return output;
-            }
-        }
-
-        // Initialize the chart
-        plotNMRChart(1024, 5, 0, 0);
-
-        // Add event listeners to sliders
-        const sliders = ['2**N', 'peakshift', 'J1', 'J2'];
-        sliders.forEach(id => {
-            const slider = document.getElementById(id);
-            const value = document.getElementById(`${id}-value`);
-            slider.addEventListener('input', () => {
-                value.textContent = slider.value;
-                plotNMRChart(
-                    2**document.getElementById('2**N').value,
-                    parseFloat(document.getElementById('peakshift').value),
-                    parseFloat(document.getElementById('J1').value),
-                    parseFloat(document.getElementById('J2').value)
-                );
-            });
-        });
+        window.onload = updateChart;
     </script>
 </body>
 </html>
